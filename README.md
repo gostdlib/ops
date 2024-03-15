@@ -1,2 +1,2 @@
-# signalling
-Packages for sending signals
+# Ops
+Packages for dealing with various operational issues, such as retrying function calls.
