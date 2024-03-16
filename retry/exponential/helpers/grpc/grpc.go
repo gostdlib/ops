@@ -34,7 +34,7 @@ Example setting an extra code for retries:
 
 Example with custom message inspection:
 
-	// We are going to provide a function that can insepct a proto.Message when
+	// We are going to provide a function that can inspect a proto.Message when
 	// the client did not send an error, but there was an error sent back from the server
 	// in the response.
 	respHasErr := func (msg proto.Message) error {
