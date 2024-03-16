@@ -4,21 +4,20 @@ for all retries within a package or set of packages.
 
 This package comes with a default policy, but can be customized for your own needs.
 
-There are no maximum retries here, as exponential retries should be based on a maximum time. Maximum time is set
+There is no maximum retries here, as exponential retries should be based on a maximum delay. This is set
 via a Context timeout. Note that the Context timeout is some point in the future after which the operation
 will not be retried. But setting 30 * seconds does not mean that the Retry() will return after 30 seconds.
 It means that after Retry() is called, no attempt will be made after 30 seconds from that point. If the first
 call takes 30 seconds and then fails, no retries will happen. If the first call takes 29 seconds and then fails,
-the second call may or may not happen depending on policy settings. It also doesn't mean the call will be returned
-after 30 seconds if still running. The call itself would need to honor the Context timeout.
+the second call may or may not happen depending on policy settings.
 
-This package returns the last error received from the Op call. It will not be a context.Canceled or
-context.DeadlineExceeded error if the retry timer was cancelled. If the call to Retry() was cancelled, you will
-receive ErrRetryCanceled. However it may still yield a context error if the Op's last error was a context error.
-If your function honors the Context timeout and returns that, you could reveive a context error wrapped with ErrRetryCanceled.
+Errors returned will always be wrapped in our package Error type. The error will be container the last error returned by the Op.
+It will not be a context.Canceled or context.DeadlineExceeded error if the retry timer was cancelled. However it may still yield
+a context error if the Op returns a context error. Error.Cancelled() tells you if the retry was cancelled.
+Error.IsCancelled() tells you if the last error returned by the Op was a context error.
 
 To understand the consequences of using any specific policy, we provide a tool to generate a time table
-for a given policy. This can be used to understand the consequences of policy settings.
+for a given policy. This can be used to understand the consequences of a policy.
 It is located in the timetable sub-package. Here is sample output giving the progression to the
 maximum interval for a policy with the default settings:
 
@@ -123,7 +122,7 @@ Example: Same as before but with a permanent error that breaks the retries:
 		var err error
 		data, err = getData(ctx)
 		if err != nil && err == badError {
-			return exponential.PermanentErr(err)
+			return fmt.Errorrf("%w: %w", err, exponential.ErrPermanent)
 		}
 		return err
 	})
@@ -133,11 +132,7 @@ Example: Same as before but with a permanent error that breaks the retries:
 Example: No return data:
 
 	err := exponential.Retry(ctx, func(ctx context.Context, r Record) error {
-		err := doSomeOperation(ctx)
-		if err != nil && err == badError {
-			return exponential.PermanentErr(err)
-		}
-		return err
+		return doSomeOperation(ctx)
 	})
 	cancel()
 	...
@@ -151,10 +146,22 @@ Example: Create a custom policy:
 		MaxInterval:         30 * time.Second,
 	}
 	boff := exponential.New(exponential.WithPolicy(policy))
+	...
 
-Example: Create a policy for testing that will make 3 attempts with no actual delay:
+Example: Retry a call that fails, but honor the service's retry timer:
 
-	boff := exponential.New(exponential.WithTesting())
+	...
+	err := exponential.Retry(ctx, func(ctx context.Context, r Record) error {
+		resp, err := client.Call(ctx, req)
+		if err != nil {
+			// extractRetry is a function that extracts the retry time from the error the server sends.
+			// This might also be in the body of an http.Response or in some header. Just think of
+			// extractRetryTime as a placeholder for whatever that is.
+			t := extractRetryTime(err)
+			return ErrRetryAfter{Time: t, Err: err}
+		}
+		return nil
+	})
 
 Example: Test a function without any delay that eventually succeeds
 
@@ -180,7 +187,7 @@ Example: Test a function that eventually fails with permanent error
 	err := boff.Retry(ctx, func(ctx context.Context, r Record) error {
 		data, err := getData(ctx)
 		if err != nil {
-			return exponential.PermanentErr(err)
+			return fmt.Errorrf("%w: %w", err, exponential.ErrPermanent)
 		}
 		return nil
 	}
