@@ -2,7 +2,7 @@
 
 [![GoDoc][godoc image]][godoc] [![Go Report Card](https://goreportcard.com/badge/github.com/gostdlib/ops)](https://goreportcard.com/report/github.com/gostdlib/ops)
 
-[![exp image]]https://github.com/gostdlib/ops/tree/main/retry/exponential
+[![exp image]]
 
 ## Introduction
 
