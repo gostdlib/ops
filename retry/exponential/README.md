@@ -64,6 +64,5 @@ Please see guidlines for contributing to the gostdlib project.
 
 [godoc]: https://pkg.go.dev/github.com/gostdlib/ops/retry/exponential
 [godoc image]: https://godoc.org/github.com/gostdlib/ops/retry/exponential?status.png
-[Go Report Card]: https://goreportcard.com/badge/github.com/gostdlib/ops/retry/exponential)(https://goreportcard.com/report/github.com/gostdlib/retry/exponential)
 [google-http-java-client]: https://github.com/google/google-http-java-client/blob/da1aa993e90285ec18579f1553339b00e19b3ab5/google-http-client/src/main/java/com/google/api/client/util/ExponentialBackOff.java
 [exponential backoff wiki]: http://en.wikipedia.org/wiki/Exponential_backoff
