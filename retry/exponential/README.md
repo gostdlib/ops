@@ -2,7 +2,7 @@
 
 [![GoDoc][godoc image]][godoc] [![Go Report Card](https://goreportcard.com/badge/github.com/gostdlib/ops)](https://goreportcard.com/report/github.com/gostdlib/ops)
 
-[![exp image]]
+![exp image]
 
 ## Introduction
 
@@ -62,7 +62,7 @@ Please see guidlines for contributing to the gostdlib project.
 
 [godoc]: https://pkg.go.dev/gostdlib/ops/retry/exponential
 [godoc image]: https://godoc.org/github.com/cenkalti/backoff?status.png
-[exp image]: https://raw.githubusercontent.com/gostdlib/ops/main/docs/imgs/backoff.webp
+[exp image]: <img src="https://raw.githubusercontent.com/gostdlib/ops/main/docs/imgs/backoff.webp" width="100">
 
 [Go Report Card]: https://goreportcard.com/badge/github.com/gostdlib/ops/retry/exponential)](https://goreportcard.com/report/github.com/gostdlib/retry/exponential)
 [google-http-java-client]: https://github.com/google/google-http-java-client/blob/da1aa993e90285ec18579f1553339b00e19b3ab5/google-http-client/src/main/java/com/google/api/client/util/ExponentialBackOff.java
