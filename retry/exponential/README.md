@@ -2,7 +2,9 @@
 
 [![GoDoc][godoc image]][godoc] [![Go Report Card](https://goreportcard.com/badge/github.com/gostdlib/ops)](https://goreportcard.com/report/github.com/gostdlib/ops)
 
-<img src="https://raw.githubusercontent.com/gostdlib/ops/main/docs/imgs/backoff.webp" width="100">
+<p align="center">
+  <img src="https://raw.githubusercontent.com/gostdlib/ops/main/docs/imgs/backoff.webp" width="500">
+</p>
 
 ## Introduction
 
