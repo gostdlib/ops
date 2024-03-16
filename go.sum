@@ -7,8 +7,6 @@ github.com/golang/protobuf v1.5.3/go.mod h1:XVQd3VNwM+JqD3oG2Ue2ip4fOMUkwXdXDdiu
 github.com/google/go-cmp v0.5.5/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=
 github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
 github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
-github.com/gostdlib/foundation v0.0.0-20240314191809-077fc1d5c4c7 h1:DV/DpRkG2zsgPEBWHMKczF0P8CmdSrVCA9IYOCWvpFk=
-github.com/gostdlib/foundation v0.0.0-20240314191809-077fc1d5c4c7/go.mod h1:yl7hs9uRqSKOf7cjXw6N/iROM6/UADUOgVfsgLONWpc=
 github.com/jedib0t/go-pretty/v6 v6.5.5 h1:PpIU8lOjxvVYGGKule0QxxJfNysUSbC9lggQU2cpZJc=
 github.com/jedib0t/go-pretty/v6 v6.5.5/go.mod h1:5LQIxa52oJ/DlDSLv0HEkWOFMDGoWkJb9ss5KqPpJBg=
 github.com/kylelemons/godebug v1.1.0 h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0SNc=

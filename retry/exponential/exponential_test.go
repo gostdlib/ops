@@ -319,7 +319,6 @@ func TestWithOptions(t *testing.T) {
 // NOTE(jdoak): This test and all other have been tested in a loop for flakiness.
 func TestRetry(t *testing.T) {
 	nonPermErr := errors.New("transient error")
-	perm := PermanentErr(errors.New("permanent error"))
 
 	tests := []struct {
 		// name is the name of the test.
@@ -342,12 +341,12 @@ func TestRetry(t *testing.T) {
 		retryErr bool
 		// retryErrPermanent indicates if the error returned by Retry() is permanent.
 		retryErrPermanent bool
-		// retryErrCancelled indicates if the error returned by Retry() is context.Canceled.
-		retryErrCancelled bool
-		// retryIsCancelled indicates if the last error returned by the function in the Op
+		// retryErrCanceled indicates if the error returned by Retry() is context.Canceled.
+		retryErrCanceled bool
+		// retryIsCanceled indicates if the last error returned by the function in the Op
 		// is context.Canceled/context.DeadlineExceeded. This is different than the Retry()
 		// loop ending with a context.Canceled error. See Error for more details.
-		retryIsCancelled bool
+		retryIsCanceled bool
 		// recCheck is the expected range of record when completed.
 		recCheck RecordCheck
 		// wantClockMin is the minimum time we want the testClock to be at when the function is done.
@@ -369,19 +368,19 @@ func TestRetry(t *testing.T) {
 		},
 		{
 			name:              "Permanent error on first attempt",
-			failures:          Failures{errors: []error{perm}},
+			failures:          Failures{errors: []error{ErrPermanent}},
 			dataWant:          RetryData{},
 			retryErr:          true,
 			retryErrPermanent: true,
-			recCheck:          NewRecordCheck(defaults(), 1).AddErr(perm),
+			recCheck:          NewRecordCheck(defaults(), 1).AddErr(ErrPermanent),
 		},
 		{
 			name:              "Permanent error on second attempt",
-			failures:          Failures{errors: []error{nonPermErr, perm}},
+			failures:          Failures{errors: []error{nonPermErr, ErrPermanent}},
 			dataWant:          RetryData{},
 			retryErr:          true,
 			retryErrPermanent: true,
-			recCheck:          NewRecordCheck(defaults(), 2).AddErr(perm),
+			recCheck:          NewRecordCheck(defaults(), 2).AddErr(ErrPermanent),
 		},
 		{
 			name: "Context deadlines after 1 second",
@@ -392,9 +391,9 @@ func TestRetry(t *testing.T) {
 			failures: Failures{
 				numFailures: -1, // Continue failing until the context times out.
 			},
-			dataWant:          RetryData{},
-			retryErr:          true,
-			retryErrCancelled: true,
+			dataWant:         RetryData{},
+			retryErr:         true,
+			retryErrCanceled: true,
 			clock: &testClock{
 				onTimer: func(t *testClock, d time.Duration) {
 					t.moveTime(d)
@@ -409,9 +408,9 @@ func TestRetry(t *testing.T) {
 			failures: Failures{
 				numFailures: -1, // Continue failing until the context times out.
 			},
-			dataWant:          RetryData{},
-			retryErr:          true,
-			retryErrCancelled: true,
+			dataWant:         RetryData{},
+			retryErr:         true,
+			retryErrCanceled: true,
 			clock: &testClock{
 				onTimer: func(t *testClock, d time.Duration) {
 					t.moveTime(d)
@@ -437,91 +436,82 @@ func TestRetry(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		test := test
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			b, err := New(test.options...)
-			if err != nil {
-				if !test.newErr {
-					t.Errorf("unexpected New() error: %v", err)
-				}
-				return
+		b, err := New(test.options...)
+		if err != nil {
+			if !test.newErr {
+				t.Errorf("TestRetry(%s): unexpected New() error: %v", test.name, err)
 			}
-			b.clock = test.clock
+			return
+		}
+		b.clock = test.clock
 
-			f := NewRetryTester(test.failures)
+		f := NewRetryTester(test.failures)
 
-			d := RetryData{}
-			finalRec := Record{}
+		d := RetryData{}
+		finalRec := Record{}
 
-			var ctx = test.ctx
-			var cancel context.CancelFunc
+		var ctx = test.ctx
+		var cancel context.CancelFunc
 
-			if ctx == nil {
-				ctx = context.Background()
-			} else if test.clock != nil {
-				fc := ctx.(*fakeContext)
-				fc.clock = test.clock.(*testClock)
+		if ctx == nil {
+			ctx = context.Background()
+		} else if test.clock != nil {
+			fc := ctx.(*fakeContext)
+			fc.clock = test.clock.(*testClock)
+		}
+		if test.cancelCtx > 0 {
+			if _, ok := ctx.(*fakeContext); ok {
+				panic("cannot use fakeContext with cancelCtx")
 			}
-			if test.cancelCtx > 0 {
-				if _, ok := ctx.(*fakeContext); ok {
-					panic("cannot use fakeContext with cancelCtx")
-				}
-				ctx, cancel = context.WithCancel(ctx)
-				go func() {
-					time.Sleep(test.cancelCtx)
-					cancel()
-				}()
-			}
+			ctx, cancel = context.WithCancel(ctx)
+			go func() {
+				time.Sleep(test.cancelCtx)
+				cancel()
+			}()
+		}
 
-			err = b.Retry(ctx, func(ctx context.Context, r Record) error {
-				finalRec = r
+		err = b.Retry(ctx, func(ctx context.Context, r Record) error {
+			finalRec = r
 
-				var err error
-				d, err = f.Run(ctx)
-				return err
-			})
-
-			switch {
-			case err == nil && test.retryErr:
-				t.Errorf("got err == nil, want err != nil")
-				return
-			case err != nil && !test.retryErr:
-				t.Errorf("got err == %s, want err == nil", err)
-				return
-			case err != nil:
-				e := isError(err)
-				if e == nil {
-					t.Errorf("Retry() returned non-nil error, but IsError(err) == nil, BUG!!!!")
-				}
-				if e.Cancelled() != test.retryErrCancelled {
-					t.Errorf("Retry() returned Error.Cancelled() == %v, want %v", e.Cancelled(), test.retryErrCancelled)
-				}
-				if e.IsPermanent() != test.retryErrPermanent {
-					t.Errorf("Retry() returned Error.IsPermanent() == %v, want %v", e.IsPermanent(), test.retryErrPermanent)
-				}
-				if e.IsCancelled() != test.retryIsCancelled {
-					t.Errorf("Retry() returned Error.IsCancelled() == %v, want %v", e.IsCancelled(), test.retryIsCancelled)
-				}
-				return
-			}
-
-			if diff := pretty.Compare(d, test.dataWant); diff != "" {
-				t.Errorf("Retry(): -got +want: %v", diff)
-			}
-			if !test.recCheck.IsZero() {
-				if err := test.recCheck.Check(finalRec); err != nil {
-					t.Errorf("Retry(): final record check had error: %v", err)
-				}
-			}
-			if test.clock != nil {
-				got := test.clock.Now()
-				if got.Before(test.wantClockMin) || got.After(test.wantClockMax) {
-					t.Errorf("Retry(): got clock time %v, want between %v and %v", got, test.wantClockMin, test.wantClockMax)
-				}
-			}
+			var err error
+			d, err = f.Run(ctx)
+			return err
 		})
+
+		switch {
+		case err == nil && test.retryErr:
+			t.Errorf("TestRetry(%s): got err == nil, want err != nil", test.name)
+			return
+		case err != nil && !test.retryErr:
+			t.Errorf("TestRetry(%s): got err == %s, want err == nil", test.name, err)
+			return
+		case err != nil:
+			if errors.Is(err, ErrRetryCanceled) != test.retryErrCanceled {
+				t.Errorf("TestRetry(%s): returned Error.Cancelled() == %v, want %v", test.name, errors.Is(err, ErrRetryCanceled), test.retryErrCanceled)
+			}
+			if errors.Is(err, ErrPermanent) != test.retryErrPermanent {
+				t.Errorf("TestRetry(%s): returned Error.IsPermanent() == %v, want %v", test.name, errors.Is(err, ErrPermanent), test.retryErrPermanent)
+			}
+			if isContextCanceled(err) != test.retryIsCanceled {
+				t.Errorf("TestRetry(%s): returned Error.IsCancelled() == %v, want %v", test.name, isContextCanceled(err), test.retryIsCanceled)
+			}
+			return
+		}
+
+		if diff := pretty.Compare(d, test.dataWant); diff != "" {
+			t.Errorf("TestRetry(%s):  -got +want: %v", test.name, diff)
+		}
+		if !test.recCheck.IsZero() {
+			if err := test.recCheck.Check(finalRec); err != nil {
+				t.Errorf("TestRetry(%s): final record check had error: %v", test.name, err)
+			}
+		}
+		if test.clock != nil {
+			got := test.clock.Now()
+			if got.Before(test.wantClockMin) || got.After(test.wantClockMax) {
+				t.Errorf("TestRetry(%s): got clock time %v, want between %v and %v", test.name, got, test.wantClockMin, test.wantClockMax)
+			}
+		}
 	}
 }
 
@@ -588,6 +578,45 @@ func TestEnsureRandomization(t *testing.T) {
 	}
 	if len(seen) < 50 {
 		t.Errorf("randomize(): got %v unique values, want at least 50", len(seen))
+	}
+}
+
+func TestRetryAfterInterval(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want time.Duration
+	}{
+		{
+			name: "Error was nil",
+			err:  nil,
+			want: 0,
+		},
+		{
+			name: "Error did not contain a ErrRetryAfter",
+			err:  errors.New("some error"),
+			want: 0,
+		},
+		{
+			name: "Error contained a ErrRetryAfter",
+			err:  ErrRetryAfter{Time: time.Time{}.Add(5 * time.Second)},
+			want: 5 * time.Second,
+		},
+		{
+			name: "Error contained a ErrRetryAfter that contains a ErrRetryAfter",
+			err:  ErrRetryAfter{Time: time.Time{}.Add(5 * time.Second), Err: fmt.Errorf("%w", ErrRetryAfter{Time: time.Time{}.Add(10 * time.Second)})},
+			want: 10 * time.Second,
+		},
+	}
+
+	for _, test := range tests {
+		b := &Backoff{policy: defaults(), clock: &testClock{}}
+		got := b.errHasRetryInterval(test.err)
+		if got != test.want {
+			t.Errorf("TestRetryAfterInterval(%s): got %v, want %v", test.name, got, test.want)
+		}
 	}
 }
 
@@ -686,47 +715,4 @@ func TestCtxOK(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestBackoffIsPermanent(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name          string
-		err           error
-		want          bool
-	}{
-		{
-			name: "Permanent error through PermanentErr",
-			err:  PermanentErr(errors.New("permanent failure")),
-			want: true,
-		},
-		{
-			name: "Standard error",
-			err:  &Error{err: errors.New("transient failure"), permanent: false},
-			want: false,
-		},
-	}
-
-	for _, test := range tests {
-		test := test
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			b := &Backoff{}
-			if got := b.isPermanent(test.err); got != test.want {
-				t.Errorf("isPermanent() = %v, want %v", got, test.want)
-			}
-		})
-	}
-}
-
-// isError returns the *Error if the error is a *Error. If not, it returns nil.
-// All calls to Retry() will return an *Error. But in case of some bug, this
-// should always be used and checked for nil.
-func isError(err error) *Error {
-	if e, ok := err.(*Error); ok {
-		return e
-	}
-	return nil
 }

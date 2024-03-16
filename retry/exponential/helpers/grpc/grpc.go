@@ -1,8 +1,11 @@
 /*
-Package grpc provides an exponential.ErrTransformer that can be used to detect non-retriable errors for gRPC calls.
+Package gRPC provides an exponential.ErrTransformer that can be used to detect non-retriable errors for gRPC calls.
+There is no direct support for gRPC streaming in this package.
 
-Example:
-	grpcErrTransform := grpc.New() // Uses defaults
+Example using just defaults:
+
+	// This will retry any grpc error codes that are considered retriable.
+	grpcErrTransform, _ := grpc.New() // Uses defaults
 
 	backoff := exponential.WithErrTransformer(grpcErrTransform)
 
@@ -19,6 +22,57 @@ Example:
 		},
 	)
 	cancel()
+
+Example setting an extra code for retries:
+
+	// The same as above, except we will retry on codes.DataLoss.
+	grpcErrTransform, err := grpc.New(WithExtraCodes(codes.DataLoss))
+	if err != nil {
+		// Handle error
+	}
+	... // The rest is the same
+
+Example with custom message inspection:
+
+	// We are going to provide a function that can insepct a proto.Message when
+	// the client did not send an error, but there was an error sent back from the server
+	// in the response.
+	respHasErr := func (msg proto.Message) error {
+		r := msg.(*pb.HelloReply)
+
+		if r.Error != "" {
+			if r.PermanentErr {
+				// This will stop retries.
+				return fmt.Errorf("%s: %w", r.Error, errors.ErrPermanent)
+			}
+			// We can still retry.
+			return fmt.Errorf("%s", r.Error)
+		}
+		return nil
+	}
+	grpcErrTransform, err := grpc.New(WithProtoToErr(respHasErr))
+	if err != nil {
+		// Handle error
+	}
+
+	backoff := exponential.WithErrTransformer(grpcErrTransform)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	req := &pb.HelloRequest{Name: "John"}
+	var resp *pb.HelloReply{}
+
+	err := backoff.Retry(
+		ctx,
+		func(ctx context.Context, r Record) error {
+			a, err := grpcErrTransform.RespToErr(client.SayHello(ctx, req)) // <- Notice the call wrapper
+			if err != nil {
+				return err
+			}
+			resp = a.(*pb.HelloReply)
+			return nil
+		},
+	)
+	cancel()
 */
 package grpc
 
@@ -26,7 +80,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/gostdlib/foundation/errors"
+	"github.com/gostdlib/ops/retry/internal/errors"
+	"google.golang.org/protobuf/proto"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -38,23 +93,55 @@ The following codes are retriable: Canceled, DeadlineExceeded, Unknown, Internal
 Any other code is not.
 */
 type Transformer struct {
-	extras map[codes.Code]bool
+	extras       map[codes.Code]bool
+	protosToErrs []ProtoToErr
+}
+
+// Option is an option for the New() constructor.
+type Option func(t *Transformer) error
+
+// WithExtraCodes defines extra grpc status codes that are considered retriable.
+func WithExtraCodes(extras ...codes.Code) Option {
+	return func(t *Transformer) error {
+		for _, code := range extras {
+			t.extras[code] = true
+		}
+		return nil
+	}
+}
+
+// ProtoToErr inspects a protocol buffer message and determines if the call was really an error.
+// If it was not, this returns nil.
+type ProtoToErr func(msg proto.Message) error
+
+// WithProtoToErrs pass functions that look at protocol buffer message responses to determine if
+// the message actually indicates an error.
+func WithProtoToErrs(protosToErrs ...ProtoToErr) Option {
+	return func(t *Transformer) error {
+		t.protosToErrs = protosToErrs
+		return nil
+	}
 }
 
 // New returns a new Transformer. This implements exponential.ErrTransformer with the method ErrTransformer.
 // You can add other codes that are retriable by passing them as arguments. This list of retriable codes
 // are listed on Transformer.
-func New(extras ...codes.Code) *Transformer {
-	m := make(map[codes.Code]bool, len(extras))
-	for _, code := range extras {
-		m[code] = true
+func New(options ...Option) (*Transformer, error) {
+	t := &Transformer{
+		extras: map[codes.Code]bool{},
 	}
-	return &Transformer{extras: m}
+
+	for _, o := range options {
+		if err := o(t); err != nil {
+			return nil, err
+		}
+	}
+	return t, nil
 }
 
 // ErrTransformer returns a transformer that can be used to detect non-retriable errors.
 // If it is non-retriable it will wrap the error with errors.ErrPermanent.
-func(t *Transformer) ErrTransformer(err error) error {
+func (t *Transformer) ErrTransformer(err error) error {
 	is, code := t.isGRPCErr(err)
 	if !is {
 		return err
@@ -109,4 +196,24 @@ func (t *Transformer) isGRPCPermanent(code codes.Code) bool {
 		return false
 	}
 	return true
+}
+
+// RespToErr takes a proto.Message and an error from a call from a protocol buffer client call method and
+// returns the Response and an error. If error != nil , this simply return the values passed. Otherwise it will inspect the
+// Response accord to rules passed to New() to determine if we have an error.
+func (t *Transformer) RespToErr(r proto.Message, err error) (proto.Message, error) {
+	if len(t.protosToErrs) == 0 {
+		return r, err
+	}
+	if err != nil {
+		return r, err
+	}
+	for _, respToErr := range t.protosToErrs {
+		if err = respToErr(r); err != nil {
+			if errors.Is(err, errors.ErrPermanent) {
+				return r, err
+			}
+		}
+	}
+	return r, err
 }

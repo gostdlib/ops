@@ -67,7 +67,7 @@ func (r *RetryTester) Run(ctx context.Context) (RetryData, error) {
 
 	if r.count < r.failures.numFailures {
 		if r.count == r.failures.failPermanent && r.failures.failPermanent > 0 {
-			return zeroRetryData, PermanentErr(errors.New("permanent error"))
+			return zeroRetryData, ErrPermanent
 		}
 		return zeroRetryData, errors.New("transient error")
 	}

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/gostdlib/foundation/errors"
+	"github.com/gostdlib/ops/retry/internal/errors"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -13,7 +13,10 @@ import (
 func TestErrTransformer(t *testing.T) {
 	t.Parallel()
 
-	tr := New(codes.NotFound)
+	tr, err := New(WithExtraCodes(codes.NotFound))
+	if err != nil {
+		panic(err)
+	}
 	for i := 1; i < 16; i++ { // 16 is the max Code in gRPC at this time and 0 is OK
 		wantPermErr := true
 		code := codes.Code(i)

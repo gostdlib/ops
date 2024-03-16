@@ -77,14 +77,10 @@ Example: With default policy and maximum time of 30 seconds while capturing a re
 
 	if err != nil {
 		// Handle the error.
-		// Errors returned will always be wrapped in *Error. You can get at it with errors.As()
-		// or IsError().
-		// This will always contain the last error returned by the Op, not a Context error unless
-		// the last error by the Op was a Context error.
-		// You can call Error.IsPermanent() to see if you had a permanent error or the helper IsPermanent().
-		// There are other Error inspection methods, see the Error type for details.
-		// Error can be unwrapped with errors.Unwrap() to get at the original error, so it works with
-		// errors.Is() and errors.As().
+		// This will always contain the last error returned by the Op, not a context error unless
+		// the last error by the Op was a context error.
+		// If the retry was cancelled, you can detect this with errors.Is(err, ErrRetryCancelled).
+		// You can determine if this was a permanent error with errors.Is(err, ErrPermanent).
 	}
 
 Example: With the default policy, maximum execution time of 30 seconds and each attempt can take
@@ -126,7 +122,7 @@ Example: Same as before but with a permanent error that breaks the retries:
 		var err error
 		data, err = getData(ctx)
 		if err != nil && err == badError {
-			return exponential.PermanentErr(err)
+			return fmt.Errorrf("%w: %w", err, exponential.ErrPermanent)
 		}
 		return err
 	})
@@ -136,11 +132,7 @@ Example: Same as before but with a permanent error that breaks the retries:
 Example: No return data:
 
 	err := exponential.Retry(ctx, func(ctx context.Context, r Record) error {
-		err := doSomeOperation(ctx)
-		if err != nil && err == badError {
-			return exponential.PermanentErr(err)
-		}
-		return err
+		return doSomeOperation(ctx)
 	})
 	cancel()
 	...
@@ -154,10 +146,22 @@ Example: Create a custom policy:
 		MaxInterval:         30 * time.Second,
 	}
 	boff := exponential.New(exponential.WithPolicy(policy))
+	...
 
-Example: Create a policy for testing that will make 3 attempts with no actual delay:
+Example: Retry a call that fails, but honor the service's retry timer:
 
-	boff := exponential.New(exponential.WithTesting())
+	...
+	err := exponential.Retry(ctx, func(ctx context.Context, r Record) error {
+		resp, err := client.Call(ctx, req)
+		if err != nil {
+			// extractRetry is a function that extracts the retry time from the error the server sends.
+			// This might also be in the body of an http.Response or in some header. Just think of
+			// extractRetryTime as a placeholder for whatever that is.
+			t := extractRetryTime(err)
+			return ErrRetryAfter{Time: t, Err: err}
+		}
+		return nil
+	})
 
 Example: Test a function without any delay that eventually succeeds
 
@@ -183,7 +187,7 @@ Example: Test a function that eventually fails with permanent error
 	err := boff.Retry(ctx, func(ctx context.Context, r Record) error {
 		data, err := getData(ctx)
 		if err != nil {
-			return exponential.PermanentErr(err)
+			return fmt.Errorrf("%w: %w", err, exponential.ErrPermanent)
 		}
 		return nil
 	}
@@ -211,14 +215,12 @@ package exponential
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"math/rand"
-	"regexp"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/gostdlib/foundation/errors"
 )
 
 // timer is a type that wraps a channel that will receive a time.Time when the timer is done.
@@ -263,8 +265,6 @@ type clock interface {
 // tests without a fake/mock interface to simulate retries either by using the WithTesting()
 // option or by setting a Policy that works with your test. This keeps code leaner, avoids
 // dynamic dispatch, unneeded allocations and is easier to test.
-//
-// This is not a thread-safe type.
 type Backoff struct {
 	// policy is the backoff policy to use.
 	policy Policy
@@ -401,7 +401,7 @@ type RetryOption func(o *retryOptions) error
 type retryOptions struct{}
 
 // Retry will retry the given operation until it succeeds, the context is cancelled or an error
-// is returned with PermanentErr().
+// is returned with PermanentErr(). This is safe to call concurrently.
 func (b *Backoff) Retry(ctx context.Context, op Op, options ...RetryOption) error {
 	r := Record{Attempt: 1}
 
@@ -419,8 +419,8 @@ func (b *Backoff) Retry(ctx context.Context, op Op, options ...RetryOption) erro
 	for {
 		err = b.applyTransformers(err)
 
-		if b.isPermanent(err) {
-			return PermanentErr(err)
+		if errors.Is(err, ErrPermanent) {
+			return err
 		}
 
 		// Check to see if the error contained an interval that is longer
@@ -431,7 +431,7 @@ func (b *Backoff) Retry(ctx context.Context, op Op, options ...RetryOption) erro
 		// If our context is done or our interval goes over the context deadline,
 		// then we are done.
 		if !b.ctxOK(ctx, realInterval) {
-			return &Error{err: r.Err, rec: r, cancelled: true}
+			return fmt.Errorf("r.Err: %w", ErrRetryCanceled)
 		}
 
 		// Do this if they did not pass the WithTesting() option.
@@ -440,7 +440,7 @@ func (b *Backoff) Retry(ctx context.Context, op Op, options ...RetryOption) erro
 			select {
 			case <-ctx.Done():
 				timer.Stop() // Prevent goroutine leak
-				return &Error{err: r.Err, rec: r, cancelled: true}
+				return fmt.Errorf("%w: %w ", r.Err, ErrRetryCanceled)
 			case <-timer.C:
 			}
 		}
@@ -500,55 +500,36 @@ func (b *Backoff) randomize(interval time.Duration) time.Duration {
 	return time.Duration(rand.Int63n(int64(max-min))) + min // #nosec
 }
 
-var retryRegexHints = []*regexp.Regexp{
-	regexp.MustCompile(`Please try again after '([0-9]+)' seconds`),
-	regexp.MustCompile(`The call can be retried in ([0-9]+) seconds`),
-}
-
 // internalSpecified is used to check if the error message contains retry hints. If it does
 // and it is more than the exponential retry timer, we will use the retry timer from the server.
 // If it is less than the exponential retry timer, we will use the exponential retry timer.
 // If the WithTextMatching() option is not used, we will always use the exponential retry timer.
 func (b *Backoff) intervalSpecified(err error, expInterval time.Duration) time.Duration {
 	// We always honor a retry internal specified in the error if it is greater than the exponential retry timer.
-	serverInterval := b.retryAfterInterval(err)
+	serverInterval := b.errHasRetryInterval(err)
 	if serverInterval > 0 {
 		if serverInterval > expInterval {
 			return serverInterval
 		}
 		return expInterval
 	}
-
-	for _, rgx := range retryRegexHints {
-		retryAfter := rgx.FindStringSubmatch(err.Error())
-		if len(retryAfter) > 1 {
-			secs, _ := strconv.Atoi(retryAfter[1])
-			if secs == 0 {
-				return expInterval
-			}
-			specDur := time.Duration(time.Duration(secs) * time.Second)
-			if specDur < expInterval {
-				return expInterval
-			}
-			return specDur
-		}
-	}
 	return expInterval
 }
 
-// retryAfterInterval looks to see if the error contains errors.ErrRetryAfter. If so, the one with
-// the longest time is returned as a duration from now.
-func (b *Backoff) retryAfterInterval(err error) time.Duration {
+// errHasRetryInterval looks to see if the error contains errors.ErrRetryAfter. If so, the one with
+// the longest time is returned as a duration from now. If there are no errors.ErrRetryAfter, then
+// 0 is returned.
+func (b *Backoff) errHasRetryInterval(err error) time.Duration {
 	var d time.Duration
 
 	for {
-		e := errors.ErrRetryAfter{}
+		e := ErrRetryAfter{}
 		if errors.As(err, &e) {
-			newDur := time.Until(e.Time)
+			newDur := b.until(e.Time)
 			if newDur > d {
 				d = newDur
 			}
-			err = e
+			err = errors.Unwrap(err)
 			continue
 		}
 		break
@@ -582,14 +563,4 @@ func (b *Backoff) ctxOK(ctx context.Context, interval time.Duration) bool {
 
 	// We have time for the interval.
 	return true
-}
-
-// isPermanent returns true if the error is a permanent error.
-func (b *Backoff) isPermanent(err error) bool {
-	// Check to see if they returned our permanent error type.
-	var e *Error
-	if errors.As(err, &e) && e != nil {
-		return e.IsPermanent()
-	}
-	return false
 }
