@@ -15,7 +15,7 @@ is an algorithm that uses feedback to multiplicatively decrease the rate of some
 in order to gradually find an acceptable rate.
 The retries exponentially increase and stop increasing when a certain threshold is met.
 
-This is a rewrite of an existing package ![github.com/cenkalti/backoff]. The orignal package works as intended. But I found was more difficult to understand and with the inclusions of genercis in the latest version, now has a lot of unnecessary function calls and return values to do similar things.
+This is a rewrite of an existing [package][cenkalti]. The orignal package works as intended, but I found that with the inclusions of genercis in the latest version, it now has a lot of unnecessary function calls and return values that do similar things. This package is a rewrite of that package with the intention of being more efficient and easier to use. I also used this opportunity to add some features that I found useful.
 
 Like that package, this package has its heritage from [Google's HTTP Client Library for Java][google-http-java-client].
 
@@ -66,3 +66,4 @@ Please see guidlines for contributing to the gostdlib project.
 [godoc image]: https://godoc.org/github.com/gostdlib/ops/retry/exponential?status.png
 [google-http-java-client]: https://github.com/google/google-http-java-client/blob/da1aa993e90285ec18579f1553339b00e19b3ab5/google-http-client/src/main/java/com/google/api/client/util/ExponentialBackOff.java
 [exponential backoff wiki]: http://en.wikipedia.org/wiki/Exponential_backoff
+[cenkalti]: github.com/cenkalti/backoff
