@@ -23,7 +23,7 @@ var (
 // ErrRetryAfter can be used to wrap an error to indicate that the error can be retried after a certain time.
 // This is useful when a remote service returns a retry interval in the response and you want to carry the
 // signal to your retry logic. This error should not be returned to the caller of Retry().
-// DO NOT use this as &ErrRetryAfter{}, simply ErrRetryAfter{} or it won't work.'
+// DO NOT use this as &ErrRetryAfter{}, simply ErrRetryAfter{} or it won't work.
 type ErrRetryAfter = errspkg.ErrRetryAfter // This is a type alias.
 
 func isContextCanceled(err error) bool {
