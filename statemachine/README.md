@@ -1,11 +1,9 @@
 # StateMachine - The Functional State Machine for Go
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/gostdlib/ops/statemachine/statemachine.svg)](https://pkg.go.dev/github.com/gostdlib/ops/statemachine)
-
 [![GoDoc][godoc image]][godoc] [![Go Report Card](https://goreportcard.com/badge/github.com/gostdlib/ops)](https://goreportcard.com/report/github.com/gostdlib/ops)
 
 <p align="center">
-  <img src="../../docs/imgs/statemachine.jpeg"  width="500">
+  <img src="../docs/imgs/statemachine.jpeg"  width="500">
 </p>
 
 ## Introduction
