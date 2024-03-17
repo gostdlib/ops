@@ -11,7 +11,7 @@ Packages for dealing with various operational issues, such as retrying function 
 
 # Introduction
 
-The packages contained within this repository provide safer primitives around some tyhpe of operation. Operations here are defined as complex calls that usually involve remote systems.
+The packages contained within this repository provide help around execution of operations. Operations here are defined as complex calls that usually involve remote systems.
 
 Complex operations which involve remote systems can fail for different reasons and packages here help with dealing with the nature of those operations.
 
