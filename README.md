@@ -26,3 +26,10 @@ Complex operations which involve remote systems can fail for different reasons a
     - The ability to log retry attempts
     - The ability to stop retrying on permanent errors
     - The ability to influence the backoff with a retry timer set to a specific time
+- `statemachine/` : A set of packages for creating functional state machines
+  - Use [`statemachine`](https://pkg.go.dev/github.com/gostdlib/ops/statemachine) if you want:
+    - A simple state machine
+    - A state machine with OTEL tracing
+    - Low allocations
+    - A way to simplify complex sequential processing
+    - Easier ways to test than a sequential call chain
