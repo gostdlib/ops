@@ -11,7 +11,7 @@ It means that after Retry() is called, no attempt will be made after 30 seconds 
 call takes 30 seconds and then fails, no retries will happen. If the first call takes 29 seconds and then fails,
 the second call may or may not happen depending on policy settings.
 
-Errors returned will always be wrapped in our package Error type. The error will be container the last error returned by the Op.
+And error returned will be the last error returned by the Op.
 It will not be a context.Canceled or context.DeadlineExceeded error if the retry timer was cancelled. However it may still yield
 a context error if the Op returns a context error. Error.Cancelled() tells you if the retry was cancelled.
 Error.IsCancelled() tells you if the last error returned by the Op was a context error.
