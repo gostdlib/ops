@@ -1,4 +1,4 @@
-<img src="./docs/ops.jpeg"  width="424" align="center">
+<img src="./docs/imgs/ops.jpeg"  width="424" align="center">
 
 # Ops
 
