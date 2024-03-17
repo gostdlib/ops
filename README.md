@@ -1,2 +1,26 @@
+<img src="./docs/ops.jpeg"  width="424" align="center">
+
 # Ops
+
 Packages for dealing with various operational issues, such as retrying function calls.
+
+[![Go Reference](https://pkg.go.dev/badge/github.com/gostdlib/ops/ops.svg)](https://pkg.go.dev/github.com/gostdlib/ops/)
+[![Go Report Card](https://goreportcard.com/badge/github.com/gostdlib/ops)](https://goreportcard.com/report/github.com/gostdlib/ops)
+
+# Introduction
+
+The packages contained within this repository provide safer primitives around some tyhpe of operation. Operations here are defined as complex calls that usually involve remote systems.
+
+Complex operations which involve remote systems can fail for different reasons and packages here help with dealing with the nature of those operations.
+
+# A quick look
+
+- `retry/` : A set of packages for retrying operations
+  - Use [`retry/exponential`](https://pkg.go.dev/github.com/gostdlib/retry/exponential) if you want:
+    - Exponential retry of some operation
+    - The ability to customize your own retry policy
+    - The ability to visualize your retry policy
+    - The ability to transform errors before retrying (like automatic handling of gRPC, HTTP, or SQL errors)
+    - The ability to log retry attempts
+    - The ability to stop retrying on permanent errors
+    - The ability to influence the backoff with a retry timer set to a specific time
