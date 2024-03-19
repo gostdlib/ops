@@ -241,11 +241,12 @@ func (r Request[T]) otelStart() Request[T] {
 		j = []byte(fmt.Sprintf("Error marshaling data: %s", err.Error()))
 	}
 
+	r.startTime = time.Now()
 	r.span.Event(
 		"statemachine processing start",
 		"data", *(*string)(unsafe.Pointer(&j)),
+		"start", r.startTime,
 	)
-	r.startTime = time.Now()
 	return r
 }
 
@@ -282,10 +283,12 @@ func (r Request[T]) otelEnd() {
 	if err != nil {
 		j = []byte(fmt.Sprintf("Error marshaling data: %s", err.Error()))
 	}
+	end := time.Now()
 	r.span.Event(
 		"statemachine processing end",
 		"data", *(*string)(unsafe.Pointer(&j)),
-		"elapsed_ns", time.Since(r.startTime),
+		"end", end,
+		"elapsed_ns", end.Sub(r.startTime),
 	)
 	r.span.End()
 }
