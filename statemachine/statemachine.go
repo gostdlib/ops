@@ -211,8 +211,7 @@ func (s *seenStages) reset() *seenStages {
 type Request[T any] struct {
 	span span.Span
 
-	// queueTime and ingestTime hold the times when the Request was queued and ingested.
-	queueTime, ingestTime time.Time
+	startTime time.Time
 
 	// Ctx is the context passed to the state function.
 	Ctx context.Context
@@ -243,10 +242,10 @@ func (r Request[T]) otelStart() Request[T] {
 	}
 
 	r.span.Event(
-		"processing start",
+		"statemachine processing start",
 		"data", *(*string)(unsafe.Pointer(&j)),
-		"queue_wait_ns", time.Since(r.queueTime),
 	)
+	r.startTime = time.Now()
 	return r
 }
 
@@ -284,9 +283,9 @@ func (r Request[T]) otelEnd() {
 		j = []byte(fmt.Sprintf("Error marshaling data: %s", err.Error()))
 	}
 	r.span.Event(
-		"processing end",
+		"statemachine processing end",
 		"data", *(*string)(unsafe.Pointer(&j)),
-		"elapsed_ns", time.Since(r.queueTime),
+		"elapsed_ns", time.Since(r.startTime),
 	)
 	r.span.End()
 }
