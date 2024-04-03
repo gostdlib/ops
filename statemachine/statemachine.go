@@ -127,12 +127,16 @@ Example:
 	func main() {
 		flag.Parse()
 
-		data := Data{
-			Author: *author,
-			httpClient: &http.Client{},
+		req := statemachine.Request{
+  			Ctx: context.Background(),
+     			Data: Data{
+				Author: *author,
+				httpClient: &http.Client{},
+			},
+   			Next: Start,
 		}
 
-		err := statemachine.Run(statemachine.Request{Ctx: context.Background(), Data: data}
+		err := statemachine.Run("Get author quotes", req)
 		if err != nil {
 			log.Fatal(err)
 		}
